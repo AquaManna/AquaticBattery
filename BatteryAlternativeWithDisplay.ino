@@ -1,31 +1,41 @@
+/*
+* Authors: Amanda Clark and Austin Tew
+* Title: Alternative Aquatic Battery
+* Last Modified: December 10, 2013
+*/
+
 #include "LCD4884.h"
 
+// Initial starting points for the display
 #define MENU_X	5		// 0-83
 #define MENU_Y	1		// 0-5
 
-const int LED_VOLTAGE_PIN = 1; // Old: 97
-const int PROBE_READ_PIN = 2; // Old: 98
+// constants used to define pin numbers
+const int LED_VOLTAGE_PIN = 1;
+const int PROBE_READ_PIN = 2;
 const int OUTPUT_VOLTAGE_PIN = 3;
 const int LIM_SWITCH_PROBE_PIN = 10;
 const int LIM_SWITCH_READ_PIN = 4;
-const int POWER_SOURCE_PIN = 8; // Old: 50
-const int DRIVE_PUMP_PIN = 9; // Old: 51
-const int VALVE_PIN = 12; // Old: 52
-const int PROBE_PIN = 13; // Old: 49
+const int POWER_SOURCE_PIN = 8;
+const int DRIVE_PUMP_PIN = 9;
+const int VALVE_PIN = 12;
+const int PROBE_PIN = 13;
 
-
+// Values used during simulation
 int LED_voltage;
 int output_voltage;
 int probe_voltage;
 int probe_lim_switch_val;
 char num[10];
 
-// the setup routine runs once when you press reset:
+// The setup routine runs once when you press reset:
 void setup() 
 {
-  //pinMode(PUMP_TRANSISTOR_PIN, OUTPUT);
-  // initialize serial communication at 9600 bits per second:
+  // Initialize serial communication at 9600 bits per second:
   Serial.begin(9600);
+  
+  // Initialize the digital pins as outputs, and initialize 
+  // their values.
   pinMode(POWER_SOURCE_PIN, OUTPUT);
   digitalWrite(POWER_SOURCE_PIN, LOW);
   pinMode(DRIVE_PUMP_PIN, OUTPUT);
@@ -35,10 +45,11 @@ void setup()
   pinMode(LIM_SWITCH_PROBE_PIN, OUTPUT);
   digitalWrite(LIM_SWITCH_PROBE_PIN, LOW);
   
-  // Display initialization
+  // LCD display initialization
   lcd.LCD_init();
   lcd.LCD_clear();
-  //menu initialization
+  
+  // Menu initialization
   init_MENU();
 }
 
@@ -46,35 +57,48 @@ void init_MENU(void)
 {
   byte i;
   lcd.LCD_clear();
+  // Display the voltage:
   lcd.LCD_write_string(MENU_X + 11, MENU_Y, "V: ", MENU_NORMAL);
+  // Initialize the source
   lcd.LCD_write_string(MENU_X + 25, MENU_Y, "None      ", MENU_NORMAL);
+  // Initialize the labes for the switch, pump, and valve.
+  // These are only displayed once to save processor time.
   lcd.LCD_write_string(MENU_X, MENU_Y + 1, "Switch:", MENU_NORMAL);
   lcd.LCD_write_string(MENU_X, MENU_Y + 2, "Pump: ", MENU_NORMAL);
   lcd.LCD_write_string(MENU_X, MENU_Y + 3, "Valve: ", MENU_NORMAL);
 }
 
-// the loop routine runs over and over again forever:
+// The loop routine runs over and over again forever:
 void loop() 
 {
-  //LED_voltage = 0;
   // read the input on analog pin 0:
   LED_voltage = analogRead(LED_VOLTAGE_PIN);//LED_VOLTAGE_PIN);
   output_voltage = analogRead(OUTPUT_VOLTAGE_PIN);
   output_voltage = output_voltage / 100;
   
   delay(10);
+  
+  // Display the input voltage:
   lcd.LCD_write_string(MENU_X, MENU_Y, itoa(output_voltage, num, 10), MENU_NORMAL);
   lcd.LCD_write_string(MENU_X + 6, MENU_Y, " ", MENU_NORMAL);  
   
+  // Not enough voltage is being supplied by the hand crank to
+  // power the LED.
   if (LED_voltage < 200)
   {
+    // Set the power to come from the hydroelectric generator.
     digitalWrite(POWER_SOURCE_PIN, LOW);
+    
+    // Determine whether the switch is on or off.
     pinMode(PROBE_PIN, OUTPUT);
     digitalWrite(PROBE_PIN, HIGH);
     delay(10);
     probe_voltage = analogRead(PROBE_READ_PIN);
+    // Set the pin to an input so that it's no longer driving
+    // the pin to a certain value.
     pinMode(PROBE_PIN, INPUT);
     
+    // The switch is on.
     if (probe_voltage > 10)
     {
       // Valve open
@@ -85,6 +109,7 @@ void loop()
       // Power source: hydroelectric generator
       lcd.LCD_write_string(MENU_X + 25, MENU_Y, "HydroGen", MENU_NORMAL);
     }
+    // The switch is off.
     else
     {
       // Valve closed
@@ -96,35 +121,42 @@ void loop()
       Serial.println("Hi!");
       lcd.LCD_write_string(MENU_X + 25, MENU_Y, "None    ", MENU_NORMAL);
     }
+    // Delay for switch probe.
     delay(500);
   }
+  // The hand crank is doing well.
   else
   {
+    // Power comes from hand crank.
     digitalWrite(POWER_SOURCE_PIN, HIGH);
     delay(10);
-    digitalWrite(VALVE_PIN, HIGH);
+    
     // Valve is closed.
+    digitalWrite(VALVE_PIN, HIGH);
     lcd.LCD_write_string(MENU_X + 42, MENU_Y + 3, "CLOSED", MENU_NORMAL);
     // Power source: hand crank
     lcd.LCD_write_string(MENU_X + 25, MENU_Y, "HandCrnk", MENU_NORMAL);
   }
   
+  // The hand crank is generating enough power for the pump 
+  // and LED.
   if(LED_voltage > 500)
   {
+    // Don't run the pump if the reservoir is full, determined
+    // by the limit switch.
     digitalWrite(LIM_SWITCH_PROBE_PIN, HIGH);
     delay(10);
     probe_lim_switch_val = analogRead(LIM_SWITCH_READ_PIN);
     digitalWrite(LIM_SWITCH_PROBE_PIN, LOW);
-    
-    Serial.print("Limit switch voltage: ");
-    Serial.println(probe_lim_switch_val);
-    // If limit switch isn't pressed:
+   
+    // If limit switch isn't pressed (reservoir isn't full):
     if (probe_lim_switch_val < 20)
     {
       // Pump on.
       digitalWrite(DRIVE_PUMP_PIN, HIGH);
       lcd.LCD_write_string(MENU_X + 42, MENU_Y + 2, "ON ", MENU_NORMAL);
     }
+    // Limit switch is pressed.
     else
     {
       // Pump off.
@@ -132,6 +164,8 @@ void loop()
       lcd.LCD_write_string(MENU_X + 42, MENU_Y + 2, "OFF", MENU_NORMAL);
     }
   }
+  // There's not enough power from the hand crank to power the
+  // pump and LED.
   else
   {
     // Pump off.
